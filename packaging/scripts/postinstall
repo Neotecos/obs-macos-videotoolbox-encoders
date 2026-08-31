@@ -1,0 +1,67 @@
+#!/bin/sh
+
+set -eu
+
+plugin_name="mac-hw-encoders-videotoolbox.plugin"
+target_volume="${3:-/}"
+payload_plugin="${target_volume%/}/Library/Application Support/Alekstyle/OBS Plugins/${plugin_name}"
+
+if [ -n "${OBS_PLUGIN_INSTALL_HOME:-}" ]; then
+	install_home="${OBS_PLUGIN_INSTALL_HOME}"
+	install_user="${OBS_PLUGIN_INSTALL_USER:-$(/usr/bin/id -un)}"
+else
+	install_user="$(/usr/bin/stat -f '%Su' /dev/console)"
+	case "${install_user}" in
+		""|root|loginwindow|_mbsetupuser)
+			echo "Unable to determine the logged-in macOS user." >&2
+			exit 1
+			;;
+	esac
+
+	install_home="$(/usr/bin/dscl . -read "/Users/${install_user}" NFSHomeDirectory | /usr/bin/sed 's/^[^:]*: //')"
+fi
+
+if [ ! -d "${payload_plugin}" ]; then
+	echo "Plugin payload not found: ${payload_plugin}" >&2
+	exit 1
+fi
+
+plugins_dir="${install_home}/Library/Application Support/obs-studio/plugins"
+target_plugin="${plugins_dir}/${plugin_name}"
+installing_plugin="${target_plugin}.installing"
+backup_plugin="${target_plugin}.previous"
+
+/bin/mkdir -p "${plugins_dir}"
+
+if [ -e "${installing_plugin}" ]; then
+	/bin/rm -rf "${installing_plugin}"
+fi
+if [ -e "${backup_plugin}" ]; then
+	/bin/rm -rf "${backup_plugin}"
+fi
+
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl "${payload_plugin}" "${installing_plugin}"
+
+if [ -e "${target_plugin}" ]; then
+	/bin/mv "${target_plugin}" "${backup_plugin}"
+fi
+
+if ! /bin/mv "${installing_plugin}" "${target_plugin}"; then
+	if [ -e "${backup_plugin}" ]; then
+		/bin/mv "${backup_plugin}" "${target_plugin}"
+	fi
+	exit 1
+fi
+
+if [ "$(/usr/bin/id -u)" -eq 0 ]; then
+	user_id="$(/usr/bin/id -u "${install_user}")"
+	group_id="$(/usr/bin/id -g "${install_user}")"
+	/usr/sbin/chown -R "${user_id}:${group_id}" "${plugins_dir}"
+fi
+
+if [ -e "${backup_plugin}" ]; then
+	/bin/rm -rf "${backup_plugin}"
+fi
+
+echo "Installed ${plugin_name} for ${install_user} at ${target_plugin}"
+exit 0
