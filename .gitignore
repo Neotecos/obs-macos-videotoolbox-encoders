@@ -1,0 +1,22 @@
+/build/
+/build-*/
+/cmake-build-*/
+/dist/
+.DS_Store
+
+# JetBrains IDEs (CLion/IntelliJ)
+/.idea/
+*.iml
+
+# Other IDEs and editor state
+/.vscode/
+/.vs/
+*.user
+*.suo
+*.swp
+*~
+
+# Local tooling and generated metadata
+/.cache/
+/compile_commands.json
+/CMakeUserPresets.json

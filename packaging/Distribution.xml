@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>Apple VideoToolbox RealTime Encoders for OBS Studio</title>
+  <organization>com.alekstyle</organization>
+  <options customize="never" require-scripts="false" rootVolumeOnly="true" hostArchitectures="arm64"/>
+  <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+  <allowed-os-versions>
+    <os-version min="13.0"/>
+  </allowed-os-versions>
+  <welcome file="welcome.html" mime-type="text/html"/>
+  <license file="LICENSE" mime-type="text/plain"/>
+  <choices-outline>
+    <line choice="default">
+      <line choice="plugin"/>
+    </line>
+  </choices-outline>
+  <choice id="default"/>
+  <choice id="plugin" visible="false">
+    <pkg-ref id="com.alekstyle.obs.mac-hw-encoders-videotoolbox"/>
+  </choice>
+  <pkg-ref
+    id="com.alekstyle.obs.mac-hw-encoders-videotoolbox"
+    version="1.0.0"
+    onConclusion="none">mac-hw-encoders-videotoolbox-component.pkg</pkg-ref>
+</installer-gui-script>
