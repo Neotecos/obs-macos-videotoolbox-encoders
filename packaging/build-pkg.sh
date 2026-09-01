@@ -4,13 +4,16 @@ set -eu
 
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 project_dir="$(dirname "${script_dir}")"
-plugin_bundle="${1:-${project_dir}/dist/mac-hw-encoders-videotoolbox.plugin}"
+plugin_bundle="${1:-${project_dir}/dist/obs-macos-videotoolbox-encoders.plugin}"
 output_dir="${2:-${project_dir}/dist}"
-package_name="mac-hw-encoders-videotoolbox-1.0.0-macos-arm64.pkg"
+distribution_file="${3:?CMake must provide a configured Distribution.xml}"
+visible_version="${4:?CMake must provide the visible version}"
+internal_version="${5:?CMake must provide the internal version}"
+package_name="obs-macos-videotoolbox-encoders-${visible_version}-macos-arm64.pkg"
 package_output="${output_dir}/${package_name}"
-package_identifier="com.alekstyle.obs.mac-hw-encoders-videotoolbox"
+package_identifier="com.alekstyle.obs.macos-videotoolbox-encoders"
 payload_location="Library/Application Support/Alekstyle/OBS Plugins"
-work_dir="$(/usr/bin/mktemp -d /tmp/mac-hw-encoders-videotoolbox-pkg.XXXXXX)"
+work_dir="$(/usr/bin/mktemp -d /tmp/obs-macos-videotoolbox-encoders-pkg.XXXXXX)"
 
 cleanup()
 {
@@ -23,26 +26,33 @@ if [ ! -d "${plugin_bundle}" ]; then
 	exit 1
 fi
 
+case "${internal_version}" in
+	""|0|*[!0-9]*)
+		echo "Internal version must be a positive integer: ${internal_version}" >&2
+		exit 1
+		;;
+esac
+
 /usr/bin/codesign --verify --deep --strict "${plugin_bundle}"
 
 payload_root="${work_dir}/payload"
-component_pkg="${work_dir}/mac-hw-encoders-videotoolbox-component.pkg"
+component_pkg="${work_dir}/obs-macos-videotoolbox-encoders-component.pkg"
 resources_dir="${work_dir}/resources"
 unsigned_product="${work_dir}/${package_name}"
 
 /bin/mkdir -p "${payload_root}/${payload_location}" "${resources_dir}" "${output_dir}"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
 	"${plugin_bundle}" \
-	"${payload_root}/${payload_location}/mac-hw-encoders-videotoolbox.plugin"
+	"${payload_root}/${payload_location}/obs-macos-videotoolbox-encoders.plugin"
 /usr/bin/xattr -cr "${payload_root}"
 
 if [ -n "${APP_SIGN_IDENTITY:-}" ]; then
 	/usr/bin/codesign --force --sign "${APP_SIGN_IDENTITY}" --options runtime --timestamp \
-		"${payload_root}/${payload_location}/mac-hw-encoders-videotoolbox.plugin"
+		"${payload_root}/${payload_location}/obs-macos-videotoolbox-encoders.plugin"
 fi
 
 /usr/bin/codesign --verify --deep --strict \
-	"${payload_root}/${payload_location}/mac-hw-encoders-videotoolbox.plugin"
+	"${payload_root}/${payload_location}/obs-macos-videotoolbox-encoders.plugin"
 /bin/cp "${project_dir}/LICENSE" "${resources_dir}/LICENSE"
 /bin/cp "${script_dir}/resources/welcome.html" "${resources_dir}/welcome.html"
 
@@ -51,13 +61,13 @@ COPYFILE_DISABLE=1 /usr/bin/pkgbuild \
 	--component-plist "${script_dir}/component.plist" \
 	--scripts "${script_dir}/scripts" \
 	--identifier "${package_identifier}" \
-	--version "1.0.0" \
+	--version "${internal_version}" \
 	--install-location "/" \
 	--ownership recommended \
 	"${component_pkg}"
 
 COPYFILE_DISABLE=1 /usr/bin/productbuild \
-	--distribution "${script_dir}/Distribution.xml" \
+	--distribution "${distribution_file}" \
 	--resources "${resources_dir}" \
 	--package-path "${work_dir}" \
 	"${unsigned_product}"

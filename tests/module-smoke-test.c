@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char encoder_id_prefix[] = "mac-hw-encoders-videotoolbox.";
+static const char encoder_id_prefix[] = "obs-macos-videotoolbox-encoders.";
 
 static bool load_module(const char *binary_path, const char *data_path)
 {

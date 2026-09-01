@@ -2,7 +2,7 @@
 
 set -eu
 
-plugin_name="mac-hw-encoders-videotoolbox.plugin"
+plugin_name="obs-macos-videotoolbox-encoders.plugin"
 target_volume="${3:-/}"
 payload_plugin="${target_volume%/}/Library/Application Support/Alekstyle/OBS Plugins/${plugin_name}"
 
