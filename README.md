@@ -125,10 +125,9 @@ gives up, at the cost of a bit more latency and memory; it requires macOS 15
 (Sequoia) or newer.
 
 **Does this work on Intel Macs?**
-Some rate-control modes (CBR, CRF) require Apple Silicon and automatically
-fall back to ABR on Intel. The published installer targets Apple Silicon; on
-Intel Macs the plugin can be built from source, but is not the primary
-supported configuration.
+The published installer targets Apple Silicon. Some rate-control modes (CBR,
+CRF) require Apple Silicon and automatically fall back to ABR when they're
+not available.
 
 **Is this an official OBS or Apple product?**
 No, it's an independent, open-source plugin. It uses only public OBS Studio
@@ -137,46 +136,6 @@ and Apple VideoToolbox APIs.
 **How do I know which OBS version this supports?**
 OBS Studio 31.1.0 or newer. The plugin checks the OBS version it's built
 against and won't build against older versions.
-
-## Building from source
-
-This section is for developers who want to build the plugin themselves
-instead of using the installer.
-
-You'll need a full build of OBS Studio 31.1.0 (or newer) from source first,
-then point CMake at it:
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-  -DOBS_SOURCE_DIR=/path/to/obs-studio-31.1.0 \
-  -DOBS_BUILD_DIR=/path/to/obs-studio-31.1.0/build_macos
-cmake --build build
-ctest --test-dir build --output-on-failure
-```
-
-Stage and install the built plugin bundle manually:
-
-```sh
-cmake --install build --prefix ./dist
-```
-
-This produces `obs-macos-videotoolbox-encoders.plugin`, which can be copied
-to:
-
-```text
-~/Library/Application Support/obs-studio/plugins/obs-macos-videotoolbox-encoders.plugin
-```
-
-Or build the graphical installer package instead:
-
-```sh
-cmake --build build --target package-pkg
-```
-
-Set `PKG_SIGN_IDENTITY` (and optionally `APP_SIGN_IDENTITY` and
-`NOTARY_KEYCHAIN_PROFILE`) as environment variables if you want to produce a
-signed and notarized package for distribution; see `CMakeLists.txt` and
-`packaging/build-pkg.sh` for details.
 
 ## License
 

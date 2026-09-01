@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
-  <title>Apple VideoToolbox RealTime Encoders for OBS Studio</title>
+  <title>Apple VideoToolbox Customizable Encoders for OBS Studio</title>
   <organization>com.alekstyle</organization>
   <options customize="never" require-scripts="false" rootVolumeOnly="true" hostArchitectures="arm64"/>
   <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
