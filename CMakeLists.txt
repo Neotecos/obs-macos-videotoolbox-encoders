@@ -6,7 +6,7 @@ set(PLUGIN_MIN_OBS_VERSION "31.1.0")
 # The visible version is a release decision. The internal version is the macOS
 # installer receipt version and must be a monotonically increasing integer.
 set(PLUGIN_VISIBLE_VERSION "1.0.0")
-set(PLUGIN_INTERNAL_VERSION "5")
+set(PLUGIN_INTERNAL_VERSION "6")
 
 project(obs-macos-videotoolbox-encoders VERSION ${PLUGIN_VISIBLE_VERSION} LANGUAGES C CXX)
 
