@@ -8,6 +8,7 @@
 #include <QSignalBlocker>
 
 #include <cstring>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -17,12 +18,11 @@ constexpr char kConfigSection[] = "MacHWEncodersVideoToolbox";
 /* Retain the original key so existing profiles keep their preference. */
 constexpr char kConfigKey[] = "EnhancedBroadcastingRealTime";
 constexpr char kMultitrackOutputName[] = "rtmp multitrack video";
-constexpr char kPluginEncoderPrefix[] = "obs-macos-videotoolbox-encoders.";
-constexpr char kNativeVideoToolboxPrefix[] = "com.apple.videotoolbox.";
 
 QAction *menu_action = nullptr;
 obs_encoder_group_t *active_group = nullptr;
 bool callback_registered = false;
+std::map<std::string, std::string> encoder_id_mappings;
 
 struct EncoderSlot {
 	size_t index = 0;
@@ -119,29 +119,41 @@ bool is_supported_multitrack_output(obs_output_t *output)
 	return supports_multitrack;
 }
 
-bool is_native_videotoolbox_encoder(const char *id, const char *codec)
-{
-	if (!id || !codec || std::strncmp(id, kNativeVideoToolboxPrefix, sizeof(kNativeVideoToolboxPrefix) - 1) != 0) {
-		return false;
-	}
-
-	return std::strcmp(codec, "h264") == 0 || std::strcmp(codec, "hevc") == 0;
-}
-
-obs_encoder_t *create_replacement(obs_encoder_t *original, const std::string &target_id)
+obs_encoder_t *create_replacement(obs_encoder_t *original, const std::string &target_id, size_t index)
 {
 	const char *codec = obs_encoder_get_codec(original);
 	const char *target_codec = obs_get_encoder_codec(target_id.c_str());
-	if (!target_codec || std::strcmp(codec, target_codec) != 0) {
+	if (!target_codec) {
+		blog(LOG_WARNING,
+		     "[VideoToolbox encoder] Multitrack Video index=%zu target=%s "
+		     "unavailable: encoder ID is not registered",
+		     index, target_id.c_str());
+		return nullptr;
+	}
+	if (!codec || std::strcmp(codec, target_codec) != 0) {
+		blog(LOG_WARNING,
+		     "[VideoToolbox encoder] Multitrack Video index=%zu target=%s "
+		     "unavailable: codec mismatch (original=%s target=%s)",
+		     index, target_id.c_str(), codec ? codec : "(null)", target_codec);
 		return nullptr;
 	}
 
-	if (obs_encoder_get_caps(original) != obs_get_encoder_caps(target_id.c_str())) {
+	const uint32_t original_caps = obs_encoder_get_caps(original);
+	const uint32_t target_caps = obs_get_encoder_caps(target_id.c_str());
+	if (original_caps != target_caps) {
+		blog(LOG_WARNING,
+		     "[VideoToolbox encoder] Multitrack Video index=%zu target=%s "
+		     "unavailable: capability mismatch (original=0x%08x target=0x%08x)",
+		     index, target_id.c_str(), original_caps, target_caps);
 		return nullptr;
 	}
 
 	obs_data_t *settings = obs_encoder_get_settings(original);
 	if (!settings) {
+		blog(LOG_WARNING,
+		     "[VideoToolbox encoder] Multitrack Video index=%zu target=%s "
+		     "unavailable: could not copy encoder settings",
+		     index, target_id.c_str());
 		return nullptr;
 	}
 
@@ -150,6 +162,10 @@ obs_encoder_t *create_replacement(obs_encoder_t *original, const std::string &ta
 	obs_encoder_t *replacement = obs_video_encoder_create(target_id.c_str(), name.c_str(), settings, nullptr);
 	obs_data_release(settings);
 	if (!replacement) {
+		blog(LOG_WARNING,
+		     "[VideoToolbox encoder] Multitrack Video index=%zu target=%s "
+		     "unavailable: replacement encoder creation failed",
+		     index, target_id.c_str());
 		return nullptr;
 	}
 
@@ -164,6 +180,10 @@ obs_encoder_t *create_replacement(obs_encoder_t *original, const std::string &ta
 	obs_encoder_set_preferred_range(replacement, obs_encoder_get_preferred_range(original));
 
 	if (!obs_encoder_set_frame_rate_divisor(replacement, obs_encoder_get_frame_rate_divisor(original))) {
+		blog(LOG_WARNING,
+		     "[VideoToolbox encoder] Multitrack Video index=%zu target=%s "
+		     "unavailable: frame-rate divisor could not be copied",
+		     index, target_id.c_str());
 		obs_encoder_release(replacement);
 		return nullptr;
 	}
@@ -263,9 +283,10 @@ void apply_multitrack_video_override()
 		slot.selected_id = slot.original_id;
 		slot.codec = obs_encoder_get_codec(original);
 
-		if (is_native_videotoolbox_encoder(slot.original_id.c_str(), slot.codec.c_str())) {
-			const std::string target_id = std::string(kPluginEncoderPrefix) + slot.original_id;
-			slot.replacement = create_replacement(original, target_id);
+		const char *mapped_id = multitrack_video_find_encoder_mapping(slot.original_id.c_str());
+		if (mapped_id) {
+			const std::string target_id = mapped_id;
+			slot.replacement = create_replacement(original, target_id, index);
 			if (slot.replacement) {
 				slot.selected_id = target_id;
 				++replacement_count;
@@ -325,6 +346,25 @@ void frontend_event(enum obs_frontend_event event, void *)
 
 } // namespace
 
+void multitrack_video_add_encoder_mapping(const char *native_id, const char *plugin_id)
+{
+	if (!native_id || !native_id[0] || !plugin_id || !plugin_id[0]) {
+		return;
+	}
+
+	encoder_id_mappings.insert_or_assign(native_id, plugin_id);
+}
+
+const char *multitrack_video_find_encoder_mapping(const char *native_id)
+{
+	if (!native_id) {
+		return nullptr;
+	}
+
+	const auto mapping = encoder_id_mappings.find(native_id);
+	return mapping == encoder_id_mappings.end() ? nullptr : mapping->second.c_str();
+}
+
 void multitrack_video_init(void)
 {
 	menu_action = static_cast<QAction *>(
@@ -349,4 +389,5 @@ void multitrack_video_shutdown(void)
 	}
 	destroy_active_group();
 	menu_action = nullptr;
+	encoder_id_mappings.clear();
 }
