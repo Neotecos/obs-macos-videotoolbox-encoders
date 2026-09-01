@@ -6,7 +6,7 @@ set(PLUGIN_MIN_OBS_VERSION "31.1.0")
 # The visible version is a release decision. The internal version is the macOS
 # installer receipt version and must be a monotonically increasing integer.
 set(PLUGIN_VISIBLE_VERSION "1.0.0")
-set(PLUGIN_INTERNAL_VERSION "3")
+set(PLUGIN_INTERNAL_VERSION "5")
 
 project(obs-macos-videotoolbox-encoders VERSION ${PLUGIN_VISIBLE_VERSION} LANGUAGES C CXX)
 
@@ -66,8 +66,14 @@ add_library(
   src/encoder.c
   src/enhanced-broadcasting.cpp
   src/enhanced-broadcasting.hpp
+  src/plugin-config.c
+  src/plugin-config.h
   src/plugin-ids.h
+  src/settings-dialog.cpp
+  src/settings-dialog.hpp
 )
+
+set_target_properties(obs-macos-videotoolbox-encoders PROPERTIES AUTOMOC ON)
 
 file(GLOB locale_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/locale/*.ini")
 set_source_files_properties(${locale_files} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/locale")

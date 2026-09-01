@@ -1,11 +1,12 @@
 #include "enhanced-broadcasting.hpp"
+#include "plugin-config.h"
+#include "settings-dialog.hpp"
 
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <util/config-file.h>
 
 #include <QAction>
-#include <QSignalBlocker>
 
 #include <cstring>
 #include <map>
@@ -14,9 +15,6 @@
 
 namespace {
 
-constexpr char kConfigSection[] = "MacHWEncodersVideoToolbox";
-/* Retain the original key so existing profiles keep their preference. */
-constexpr char kConfigKey[] = "EnhancedBroadcastingRealTime";
 constexpr char kMultitrackOutputName[] = "rtmp multitrack video";
 
 QAction *menu_action = nullptr;
@@ -43,43 +41,6 @@ void release_slots(std::vector<EncoderSlot> &encoder_slots)
 	}
 }
 
-bool option_enabled()
-{
-	config_t *config = obs_frontend_get_profile_config();
-	return config && config_get_bool(config, kConfigSection, kConfigKey);
-}
-
-void set_option_default()
-{
-	config_t *config = obs_frontend_get_profile_config();
-	if (config) {
-		config_set_default_bool(config, kConfigSection, kConfigKey, false);
-	}
-}
-
-void save_option(bool enabled)
-{
-	config_t *config = obs_frontend_get_profile_config();
-	if (!config) {
-		return;
-	}
-
-	config_set_bool(config, kConfigSection, kConfigKey, enabled);
-	if (config_save_safe(config, "tmp", nullptr) != CONFIG_SUCCESS) {
-		blog(LOG_WARNING, "[VideoToolbox encoder] Could not save the Multitrack Video preference");
-	}
-}
-
-void refresh_action()
-{
-	if (!menu_action) {
-		return;
-	}
-
-	set_option_default();
-	const QSignalBlocker blocker(menu_action);
-	menu_action->setChecked(option_enabled());
-}
 
 void destroy_active_group()
 {
@@ -158,7 +119,7 @@ obs_encoder_t *create_replacement(obs_encoder_t *original, const std::string &ta
 	}
 
 	std::string name = obs_encoder_get_name(original);
-	name += " (RealTime Multitrack)";
+	name += " (Customizable Multitrack)";
 	obs_encoder_t *replacement = obs_video_encoder_create(target_id.c_str(), name.c_str(), settings, nullptr);
 	obs_data_release(settings);
 	if (!replacement) {
@@ -245,7 +206,7 @@ bool install_replacements(obs_output_t *output, const std::vector<EncoderSlot> &
 void apply_multitrack_video_override()
 {
 	destroy_active_group();
-	if (!option_enabled()) {
+	if (!plugin_config_get_multitrack_enabled()) {
 		return;
 	}
 
@@ -261,7 +222,7 @@ void apply_multitrack_video_override()
 
 	config_t *config = obs_frontend_get_profile_config();
 	if (config_get_bool(config, "Stream1", "MultitrackVideoStreamDumpEnabled")) {
-		blog(LOG_WARNING, "[VideoToolbox encoder] Multitrack Video RealTime override "
+		blog(LOG_WARNING, "[VideoToolbox encoder] Multitrack Video Customizable override "
 				  "skipped while the multitrack stream dump is enabled");
 		obs_output_release(output);
 		return;
@@ -311,11 +272,11 @@ void apply_multitrack_video_override()
 	}
 
 	if (!installed) {
-		blog(LOG_WARNING, "[VideoToolbox encoder] Multitrack Video RealTime override "
+		blog(LOG_WARNING, "[VideoToolbox encoder] Multitrack Video Customizable override "
 				  "unavailable; OBS will use its original encoders");
 	} else {
 		blog(LOG_INFO,
-		     "[VideoToolbox encoder] Multitrack Video RealTime override "
+		     "[VideoToolbox encoder] Multitrack Video Customizable override "
 		     "applied to %zu encoder(s)",
 		     replacement_count);
 	}
@@ -332,9 +293,6 @@ void frontend_event(enum obs_frontend_event event, void *)
 		break;
 	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
 		destroy_active_group();
-		break;
-	case OBS_FRONTEND_EVENT_PROFILE_CHANGED:
-		refresh_action();
 		break;
 	case OBS_FRONTEND_EVENT_EXIT:
 		destroy_active_group();
@@ -367,16 +325,14 @@ const char *multitrack_video_find_encoder_mapping(const char *native_id)
 
 void multitrack_video_init(void)
 {
-	menu_action = static_cast<QAction *>(
-		obs_frontend_add_tools_menu_qaction(obs_module_text("MultitrackVideo.UseRealTime")));
+	menu_action =
+		static_cast<QAction *>(obs_frontend_add_tools_menu_qaction(obs_module_text("SettingsWindow.Title")));
 	if (!menu_action) {
 		blog(LOG_INFO, "[VideoToolbox encoder] OBS frontend unavailable; Multitrack Video integration disabled");
 		return;
 	}
 
-	menu_action->setCheckable(true);
-	refresh_action();
-	QObject::connect(menu_action, &QAction::toggled, [](bool enabled) { save_option(enabled); });
+	QObject::connect(menu_action, &QAction::triggered, []() { VTSettingsDialog::show_dialog(); });
 	obs_frontend_add_event_callback(frontend_event, nullptr);
 	callback_registered = true;
 }
@@ -388,6 +344,7 @@ void multitrack_video_shutdown(void)
 		callback_registered = false;
 	}
 	destroy_active_group();
+	VTSettingsDialog::shutdown();
 	menu_action = nullptr;
 	encoder_id_mappings.clear();
 }

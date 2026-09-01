@@ -19,6 +19,7 @@
 #include <stdio.h>
 
 #include "enhanced-broadcasting.hpp"
+#include "plugin-config.h"
 #include "plugin-ids.h"
 
 #ifndef OBS_ENCODER_CAP_MULTITRACK_DYN_BITRATE
@@ -90,6 +91,9 @@ struct vt_encoder {
 	CMSimpleQueueRef queue;
 	bool hw_enc;
 	bool realtime;
+	bool prioritize_speed;
+	bool lookahead_enabled;
+	int lookahead_frames;
 	DARRAY(uint8_t) packet_data;
 	DARRAY(uint8_t) extra_data;
 };
@@ -512,8 +516,15 @@ static OSStatus create_encoder(struct vt_encoder *enc)
 
 	const char *codec_name = obs_encoder_get_codec(enc->encoder);
 	struct vt_encoder_type_data *type_data = (struct vt_encoder_type_data *)obs_encoder_get_type_data(enc->encoder);
-	enc->realtime = type_data->hardware_accelerated &&
-			(enc->codec_type == kCMVideoCodecType_H264 || enc->codec_type == kCMVideoCodecType_HEVC);
+
+	if (enc->codec_type == kCMVideoCodecType_H264 || enc->codec_type == kCMVideoCodecType_HEVC) {
+		vt_codec_tuning_t tuning;
+		plugin_config_get_tuning(codec_name, &tuning);
+		enc->realtime = tuning.realtime;
+		enc->prioritize_speed = tuning.prioritize_speed;
+		enc->lookahead_enabled = tuning.lookahead_enabled;
+		enc->lookahead_frames = tuning.lookahead_frames;
+	}
 
 	CFDictionaryRef encoder_spec;
 	if (strcmp(codec_name, "prores") == 0) {
@@ -621,6 +632,25 @@ static OSStatus create_encoder(struct vt_encoder *enc)
 			     "frame delay might be increased",
 			     code);
 
+	code = session_set_prop(s, kVTCompressionPropertyKey_PrioritizeEncodingSpeedOverQuality,
+				enc->prioritize_speed ? kCFBooleanTrue : kCFBooleanFalse);
+	if (code != noErr)
+		log_osstatus(LOG_WARNING, enc, "setting kVTCompressionPropertyKey_PrioritizeEncodingSpeedOverQuality failed",
+			     code);
+
+	if (enc->lookahead_enabled) {
+		if (__builtin_available(macOS 15.0, *)) {
+			CFNumberRef lookahead =
+				CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &enc->lookahead_frames);
+			code = VTSessionSetProperty(s, kVTCompressionPropertyKey_SuggestedLookAheadFrameCount, lookahead);
+			CFRelease(lookahead);
+			if (code != noErr)
+				log_osstatus(LOG_WARNING, enc,
+					     "setting kVTCompressionPropertyKey_SuggestedLookAheadFrameCount failed",
+					     code);
+		}
+	}
+
 	code = session_set_colorspace(s, enc->colorspace);
 	if (code != noErr) {
 		return code;
@@ -669,12 +699,15 @@ static void dump_encoder_info(struct vt_encoder *enc)
 		"\trc_max_bitrate_window: %f (s)\n"
 		"\thw_enc:                %s\n"
 		"\trealtime:              %s\n"
+		"\tprioritize_speed:      %s\n"
+		"\tlookahead:             %s (%d frames)\n"
 		"\tspatial_aq:            %s\n"
 		"\tprofile:               %s\n"
 		"\tcodec_type:            %.4s\n",
 		enc->vt_encoder_id, enc->rate_control, enc->bitrate, enc->quality, enc->fps_num, enc->fps_den,
 		enc->width, enc->height, enc->keyint, enc->limit_bitrate ? "on" : "off", enc->rc_max_bitrate,
 		enc->rc_max_bitrate_window, enc->hw_enc ? "on" : "off", enc->realtime ? "on" : "off",
+		enc->prioritize_speed ? "on" : "off", enc->lookahead_enabled ? "on" : "off", enc->lookahead_frames,
 		enc->spatial_aq ? "on" : "off",
 		(enc->profile != NULL && !!strlen(enc->profile)) ? enc->profile : "default",
 		codec_type_to_print_fmt(enc->codec_type));
@@ -1430,7 +1463,7 @@ CFArrayRef encoder_list;
 
 const char *obs_module_description(void)
 {
-	return "Adds Apple VideoToolbox RealTime H.264/HEVC hardware encoders and lets "
+	return "Adds customizable Apple VideoToolbox H.264/HEVC hardware encoders and lets "
 	       "Multitrack Video use them with Twitch, Amazon IVS, and Dolby OptiView/Millicast";
 }
 
@@ -1529,7 +1562,7 @@ void obs_module_post_load(void)
 #endif
 		}
 
-		static const char display_suffix[] = " (RealTime)";
+		static const char display_suffix[] = " (Customizable)";
 		char *obs_id = bmalloc(sizeof(OBS_MACOS_VT_ENCODER_ID_PREFIX) + strlen(id));
 		char *plugin_disp_name = bmalloc(strlen(base_name) + sizeof(display_suffix));
 		snprintf(obs_id, sizeof(OBS_MACOS_VT_ENCODER_ID_PREFIX) + strlen(id), "%s%s",
@@ -1553,7 +1586,7 @@ void obs_module_post_load(void)
 
 	CFRelease(encoder_list);
 
-	VT_LOG(LOG_INFO, "Added RealTime VideoToolbox hardware H.264/HEVC encoders");
+	VT_LOG(LOG_INFO, "Added Customizable VideoToolbox hardware H.264/HEVC encoders");
 	multitrack_video_init();
 }
 
