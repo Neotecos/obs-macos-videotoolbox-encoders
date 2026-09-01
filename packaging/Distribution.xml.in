@@ -16,10 +16,10 @@
   </choices-outline>
   <choice id="default"/>
   <choice id="plugin" visible="false">
-    <pkg-ref id="com.alekstyle.obs.mac-hw-encoders-videotoolbox"/>
+    <pkg-ref id="com.alekstyle.obs.macos-videotoolbox-encoders"/>
   </choice>
   <pkg-ref
-    id="com.alekstyle.obs.mac-hw-encoders-videotoolbox"
-    version="1.0.0"
-    onConclusion="none">mac-hw-encoders-videotoolbox-component.pkg</pkg-ref>
+    id="com.alekstyle.obs.macos-videotoolbox-encoders"
+    version="@PLUGIN_INTERNAL_VERSION@"
+    onConclusion="none">obs-macos-videotoolbox-encoders-component.pkg</pkg-ref>
 </installer-gui-script>

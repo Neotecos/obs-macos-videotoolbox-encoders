@@ -1,7 +1,6 @@
 /*
- * Derived from OBS Studio's mac-videotoolbox module at 32.2.2-realtime.1.
- * Modified in 2026 to register standalone hardware H.264/HEVC encoder IDs
- * while preserving the fork's VideoToolbox encoder behavior.
+ * Standalone Apple VideoToolbox hardware H.264/HEVC encoders for OBS Studio
+ * 31.1.0 or newer.
  */
 
 #include <obs-module.h>
@@ -18,6 +17,13 @@
 
 #include <assert.h>
 #include <stdio.h>
+
+#include "enhanced-broadcasting.hpp"
+
+#ifndef OBS_ENCODER_CAP_MULTITRACK_DYN_BITRATE
+/* Added in OBS 32.2.0. Earlier Enhanced Broadcasting releases use DYN_BITRATE. */
+#define OBS_ENCODER_CAP_MULTITRACK_DYN_BITRATE 0
+#endif
 
 #define VT_LOG(level, format, ...) blog(level, "[VideoToolbox encoder]: " format, ##__VA_ARGS__)
 #define VT_LOG_ENCODER(encoder, codec_type, level, format, ...)                        \
@@ -1415,13 +1421,14 @@ static inline void vt_add_prores_encoder_data_to_list(CFDictionaryRef encoder_di
 }
 
 OBS_DECLARE_MODULE()
-OBS_MODULE_USE_DEFAULT_LOCALE("mac-hw-encoders-videotoolbox", "en-US")
+OBS_MODULE_USE_DEFAULT_LOCALE("obs-macos-videotoolbox-encoders", "en-US")
 dispatch_group_t encoder_list_dispatch_group;
 CFArrayRef encoder_list;
 
 const char *obs_module_description(void)
 {
-	return "Apple VideoToolbox hardware H.264/HEVC encoders with RealTime enabled";
+	return "Adds Apple VideoToolbox RealTime H.264/HEVC hardware encoders and lets "
+	       "Multitrack Video use them with Twitch, Amazon IVS, and Dolby OptiView/Millicast";
 }
 
 bool obs_module_load(void)
@@ -1513,7 +1520,7 @@ void obs_module_post_load(void)
 #endif
 		}
 
-		static const char obs_id_prefix[] = "mac-hw-encoders-videotoolbox.";
+		static const char obs_id_prefix[] = "obs-macos-videotoolbox-encoders.";
 		static const char display_suffix[] = " (RealTime)";
 		char *obs_id = bmalloc(sizeof(obs_id_prefix) + strlen(id));
 		char *plugin_disp_name = bmalloc(strlen(base_name) + sizeof(display_suffix));
@@ -1537,10 +1544,12 @@ void obs_module_post_load(void)
 	CFRelease(encoder_list);
 
 	VT_LOG(LOG_INFO, "Added RealTime VideoToolbox hardware H.264/HEVC encoders");
+	multitrack_video_init();
 }
 
 void obs_module_unload(void)
 {
+	multitrack_video_shutdown();
 	da_free(vt_prores_hardware_encoder_list);
 	da_free(vt_prores_software_encoder_list);
 }

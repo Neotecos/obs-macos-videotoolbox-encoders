@@ -10,7 +10,7 @@
     <key>BundleOverwriteAction</key>
     <string>upgrade</string>
     <key>RootRelativeBundlePath</key>
-    <string>Library/Application Support/Alekstyle/OBS Plugins/mac-hw-encoders-videotoolbox.plugin</string>
+    <string>Library/Application Support/Alekstyle/OBS Plugins/obs-macos-videotoolbox-encoders.plugin</string>
   </dict>
 </array>
 </plist>
