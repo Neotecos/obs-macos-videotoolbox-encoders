@@ -19,11 +19,14 @@
 #include <stdio.h>
 
 #include "enhanced-broadcasting.hpp"
+#include "plugin-ids.h"
 
 #ifndef OBS_ENCODER_CAP_MULTITRACK_DYN_BITRATE
 /* Added in OBS 32.2.0. Earlier Enhanced Broadcasting releases use DYN_BITRATE. */
-#define OBS_ENCODER_CAP_MULTITRACK_DYN_BITRATE 0
+#define OBS_ENCODER_CAP_MULTITRACK_DYN_BITRATE (1U << 6)
 #endif
+
+#define OBS_VERSION_32_2_0 MAKE_SEMANTIC_VERSION(32U, 2U, 0U)
 
 #define VT_LOG(level, format, ...) blog(level, "[VideoToolbox encoder]: " format, ##__VA_ARGS__)
 #define VT_LOG_ENCODER(encoder, codec_type, level, format, ...)                        \
@@ -1449,6 +1452,9 @@ bool obs_module_load(void)
 
 void obs_module_post_load(void)
 {
+	const uint32_t runtime_caps =
+		OBS_ENCODER_CAP_DYN_BITRATE |
+		(obs_get_version() >= OBS_VERSION_32_2_0 ? OBS_ENCODER_CAP_MULTITRACK_DYN_BITRATE : 0);
 	struct obs_encoder_info info = {
 		.type = OBS_ENCODER_VIDEO,
 		.get_name = vt_getname,
@@ -1459,8 +1465,11 @@ void obs_module_post_load(void)
 		.get_defaults2 = vt_defaults,
 		.get_extra_data = vt_extra_data,
 		.free_type_data = vt_free_type_data,
-		.caps = OBS_ENCODER_CAP_DYN_BITRATE | OBS_ENCODER_CAP_MULTITRACK_DYN_BITRATE,
+		.caps = runtime_caps,
 	};
+
+	VT_LOG(LOG_INFO, "Registering encoders for OBS %s with capabilities 0x%08x", obs_get_version_string(),
+	       runtime_caps);
 
 	da_init(vt_prores_hardware_encoder_list);
 	da_init(vt_prores_software_encoder_list);
@@ -1520,11 +1529,11 @@ void obs_module_post_load(void)
 #endif
 		}
 
-		static const char obs_id_prefix[] = "obs-macos-videotoolbox-encoders.";
 		static const char display_suffix[] = " (RealTime)";
-		char *obs_id = bmalloc(sizeof(obs_id_prefix) + strlen(id));
+		char *obs_id = bmalloc(sizeof(OBS_MACOS_VT_ENCODER_ID_PREFIX) + strlen(id));
 		char *plugin_disp_name = bmalloc(strlen(base_name) + sizeof(display_suffix));
-		snprintf(obs_id, sizeof(obs_id_prefix) + strlen(id), "%s%s", obs_id_prefix, id);
+		snprintf(obs_id, sizeof(OBS_MACOS_VT_ENCODER_ID_PREFIX) + strlen(id), "%s%s",
+			 OBS_MACOS_VT_ENCODER_ID_PREFIX, id);
 		snprintf(plugin_disp_name, strlen(base_name) + sizeof(display_suffix), "%s%s", base_name,
 			 display_suffix);
 
@@ -1539,6 +1548,7 @@ void obs_module_post_load(void)
 		info.type_data = type_data;
 
 		obs_register_encoder(&info);
+		multitrack_video_add_encoder_mapping(id, obs_id);
 	}
 
 	CFRelease(encoder_list);

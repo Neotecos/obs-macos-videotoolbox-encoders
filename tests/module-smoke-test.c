@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char encoder_id_prefix[] = "obs-macos-videotoolbox-encoders.";
+#include "plugin-ids.h"
 
 static bool load_module(const char *binary_path, const char *data_path)
 {
@@ -80,16 +80,17 @@ int main(int argc, char **argv)
 	}
 
 	obs_post_load_modules();
+	printf("testing against OBS %s (0x%08x)\n", obs_get_version_string(), obs_get_version());
 
 	size_t plugin_encoder_count = 0;
 	for (size_t index = 0;; index++) {
 		const char *plugin_id = NULL;
 		if (!obs_enum_encoder_types(index, &plugin_id))
 			break;
-		if (strncmp(plugin_id, encoder_id_prefix, sizeof(encoder_id_prefix) - 1) != 0)
+		if (strncmp(plugin_id, OBS_MACOS_VT_ENCODER_ID_PREFIX, sizeof(OBS_MACOS_VT_ENCODER_ID_PREFIX) - 1) != 0)
 			continue;
 
-		const char *upstream_id = plugin_id + sizeof(encoder_id_prefix) - 1;
+		const char *upstream_id = plugin_id + sizeof(OBS_MACOS_VT_ENCODER_ID_PREFIX) - 1;
 		const char *upstream_codec = obs_get_encoder_codec(upstream_id);
 		const char *plugin_codec = obs_get_encoder_codec(plugin_id);
 		const char *display_name = obs_encoder_get_display_name(plugin_id);
@@ -109,8 +110,11 @@ int main(int argc, char **argv)
 			obs_shutdown();
 			return 1;
 		}
-		if (obs_get_encoder_caps(upstream_id) != obs_get_encoder_caps(plugin_id)) {
-			fprintf(stderr, "capability mismatch for %s\n", plugin_id);
+		const uint32_t upstream_caps = obs_get_encoder_caps(upstream_id);
+		const uint32_t plugin_caps = obs_get_encoder_caps(plugin_id);
+		if (upstream_caps != plugin_caps) {
+			fprintf(stderr, "capability mismatch for %s: upstream=0x%08x plugin=0x%08x\n", plugin_id,
+				upstream_caps, plugin_caps);
 			obs_shutdown();
 			return 1;
 		}
@@ -125,7 +129,8 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
-		printf("verified %s (%s) against %s\n", plugin_id, display_name, upstream_id);
+		printf("verified %s (%s) against %s with capabilities 0x%08x\n", plugin_id, display_name, upstream_id,
+		       plugin_caps);
 		plugin_encoder_count++;
 	}
 

@@ -6,7 +6,7 @@ set(PLUGIN_MIN_OBS_VERSION "31.1.0")
 # The visible version is a release decision. The internal version is the macOS
 # installer receipt version and must be a monotonically increasing integer.
 set(PLUGIN_VISIBLE_VERSION "1.0.0")
-set(PLUGIN_INTERNAL_VERSION "2")
+set(PLUGIN_INTERNAL_VERSION "3")
 
 project(obs-macos-videotoolbox-encoders VERSION ${PLUGIN_VISIBLE_VERSION} LANGUAGES C CXX)
 
@@ -15,6 +15,8 @@ include(CTest)
 set(OBS_SOURCE_DIR "" CACHE PATH "Path to the official OBS Studio ${PLUGIN_MIN_OBS_VERSION} (or newer) source tree")
 set(OBS_BUILD_DIR "" CACHE PATH "Path to the official OBS Studio ${PLUGIN_MIN_OBS_VERSION} (or newer) build tree")
 set(OBS_APP_BUNDLE "" CACHE PATH "Path to the official OBS Studio ${PLUGIN_MIN_OBS_VERSION} (or newer) OBS.app bundle")
+set(OBS_COMPAT_APP_BUNDLES "" CACHE STRING "Additional OBS.app bundles used for cross-version smoke tests")
+set(OBS_TEST_LIBRARY_PATHS "" CACHE STRING "Additional library/framework search paths for development OBS builds")
 
 if(NOT APPLE)
   message(FATAL_ERROR "obs-macos-videotoolbox-encoders only supports macOS")
@@ -64,6 +66,7 @@ add_library(
   src/encoder.c
   src/enhanced-broadcasting.cpp
   src/enhanced-broadcasting.hpp
+  src/plugin-ids.h
 )
 
 file(GLOB locale_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/locale/*.ini")
@@ -143,21 +146,39 @@ install(
 
 if(BUILD_TESTING)
   add_executable(module-smoke-test tests/module-smoke-test.c)
+  target_include_directories(module-smoke-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
   target_link_libraries(module-smoke-test PRIVATE OBS::libobs)
 
-  set(obs_builtin_vt_bundle "${OBS_APP_BUNDLE}/Contents/PlugIns/mac-videotoolbox.plugin/Contents")
-  add_test(
-    NAME module-smoke-test
-    COMMAND
-      module-smoke-test
-      "${obs_builtin_vt_bundle}/MacOS/mac-videotoolbox"
-      "${obs_builtin_vt_bundle}/Resources"
-      "$<TARGET_FILE:obs-macos-videotoolbox-encoders>"
-      "$<TARGET_BUNDLE_CONTENT_DIR:obs-macos-videotoolbox-encoders>/Resources"
-  )
-  set_tests_properties(
-    module-smoke-test
-    PROPERTIES ENVIRONMENT
-               "DYLD_LIBRARY_PATH=${OBS_APP_BUNDLE}/Contents/Frameworks;DYLD_FRAMEWORK_PATH=${OBS_APP_BUNDLE}/Contents/Frameworks"
-  )
+  function(add_obs_compat_smoke_test test_name app_bundle)
+    if(NOT EXISTS "${app_bundle}/Contents/Frameworks/libobs.framework")
+      message(FATAL_ERROR "${test_name}: no usable OBS.app at ${app_bundle}")
+    endif()
+
+    set(obs_builtin_vt_bundle "${app_bundle}/Contents/PlugIns/mac-videotoolbox.plugin/Contents")
+    set(obs_runtime_library_paths "${app_bundle}/Contents/Frameworks" ${OBS_TEST_LIBRARY_PATHS})
+    list(JOIN obs_runtime_library_paths ":" obs_runtime_library_path)
+    add_test(
+      NAME "${test_name}"
+      COMMAND
+        module-smoke-test
+        "${obs_builtin_vt_bundle}/MacOS/mac-videotoolbox"
+        "${obs_builtin_vt_bundle}/Resources"
+        "$<TARGET_FILE:obs-macos-videotoolbox-encoders>"
+        "$<TARGET_BUNDLE_CONTENT_DIR:obs-macos-videotoolbox-encoders>/Resources"
+    )
+    set_tests_properties(
+      "${test_name}"
+      PROPERTIES
+        ENVIRONMENT
+          "DYLD_LIBRARY_PATH=${obs_runtime_library_path};DYLD_FRAMEWORK_PATH=${obs_runtime_library_path}"
+        LABELS "compatibility"
+    )
+  endfunction()
+
+  add_obs_compat_smoke_test(module-smoke-test "${OBS_APP_BUNDLE}")
+  set(obs_compat_index 0)
+  foreach(obs_compat_app_bundle IN LISTS OBS_COMPAT_APP_BUNDLES)
+    math(EXPR obs_compat_index "${obs_compat_index} + 1")
+    add_obs_compat_smoke_test("module-smoke-test-compat-${obs_compat_index}" "${obs_compat_app_bundle}")
+  endforeach()
 endif()
