@@ -105,7 +105,7 @@ int main(int argc, char **argv)
 			obs_shutdown();
 			return 1;
 		}
-		if (!display_name || !strstr(display_name, "(RealTime)")) {
+		if (!display_name || !strstr(display_name, "(Customizable)")) {
 			fprintf(stderr, "unexpected display name for %s\n", plugin_id);
 			obs_shutdown();
 			return 1;

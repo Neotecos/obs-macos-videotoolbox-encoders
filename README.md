@@ -1,41 +1,150 @@
-# obs-macos-videotoolbox-encoders
+# OBS macOS VideoToolbox Customizable Encoders
 
-Standalone OBS Studio plugin that adds Apple VideoToolbox RealTime hardware
-H.264 and HEVC encoders. It also lets OBS use those encoders for Multitrack
-Video. The currently supported services are Twitch Enhanced Broadcasting,
-Amazon IVS Multitrack Video, and Dolby OptiView Real-time Enhanced Broadcasting
-(named Dolby Millicast in older OBS service lists).
+A plugin for [OBS Studio](https://obsproject.com) on Mac that adds two extra
+hardware encoders — **Apple VT H264 Hardware Encoder (Customizable)** and
+**Apple VT HEVC Hardware Encoder (Customizable)** — plus a settings window to
+tune their latency/quality trade-offs, and lets OBS use them automatically for
+**Multitrack Video** streaming.
 
-This release targets the public API and build products of OBS Studio `31.1.0`
-or newer. The plugin registers separate encoder IDs while retaining the native
-Apple encoder IDs as the suffix, so each original VideoToolbox encoder has an
-unambiguous RealTime counterpart.
+## Why would I want this?
 
-The **Tools** menu includes **Use RealTime VideoToolbox encoders for Multitrack
-Video**. When enabled, the option is stored in the current OBS profile. At
-streaming start, it replaces only native Apple H.264/HEVC encoders created for
-a supported Multitrack Video service with their matching RealTime counterparts.
-Other streams and outputs are unchanged. Missing or incompatible replacements
-fall back to the encoders selected by OBS.
+OBS already ships Apple's VideoToolbox hardware encoders. This plugin adds
+"Customizable" versions of the same H.264 and HEVC encoders that expose three
+VideoToolbox settings OBS's own encoders don't:
 
-## OBS compatibility
+- **RealTime** — asks the hardware encoder to keep pace with real time
+  instead of taking extra time per frame. This is what streaming services
+  expect from hardware encoders on live tracks.
+- **Prioritize Encoding Speed Over Quality** — lets the encoder trade quality
+  for extra speed if it's struggling to keep up.
+- **Custom Lookahead Frame Count** (macOS 15 Sequoia or newer) — controls how
+  many upcoming frames the encoder studies before compressing, which can claw
+  back some of the quality RealTime mode gives up.
 
-OBS Studio `31.1.0` is the supported minimum. The plugin uses only public
-frontend and libobs APIs available in that release, including the APIs used by
-the Multitrack override. Multitrack service support is detected at runtime from
-the selected service configuration, so adding Twitch, Amazon IVS, or Dolby
-OptiView support does not require raising the OBS minimum.
+All three default to off, so a freshly installed Customizable encoder behaves
+exactly like OBS's own native hardware encoder until you turn something on.
+You configure them once, from **Tools → macOS VideoToolbox Encoders…**, for
+each codec — the setting isn't per output or per profile, it applies to every
+use of that encoder on this Mac.
 
-CMake reads the OBS version from the selected build cache and rejects any
-version below `31.1.0`.
+This also lets OBS's **Multitrack Video** feature — used by Twitch Enhanced
+Broadcasting, Amazon IVS Multitrack Video, and Dolby OptiView Real-time
+Enhanced Broadcasting (also known as Dolby Millicast) — automatically pick
+the Customizable encoder instead of the standard one, with no manual setup
+per stream.
 
-Do not raise this minimum without first building the plugin against the
-official `31.1.0` tag and demonstrating that a required public API is missing.
+You can also select either Customizable encoder directly and use it like any
+other encoder in OBS, for outputs outside of Multitrack Video.
 
-## Build
+## Requirements
 
-Build OBS Studio `31.1.0` or newer first, then pass both paths explicitly. The
-minimum-version validation should use the official `31.1.0` tag:
+- macOS 13 (Ventura) or newer, on a Mac with Apple Silicon (macOS 15 Sequoia
+  or newer for the Custom Lookahead Frame Count setting)
+- OBS Studio 31.1.0 or newer
+- A Mac whose chip supports hardware H.264/HEVC encoding (all Apple Silicon
+  Macs do)
+
+## Installing
+
+1. Download the latest `.pkg` installer from the
+   [Releases](../../releases) page.
+2. Double-click the downloaded file and follow the installer.
+3. Restart OBS Studio if it was running.
+
+The installer places the plugin in your user's OBS plugin folder, so it only
+affects your own OBS installation — it does not require admin rights beyond
+the standard installer prompt, and it does not touch OBS Studio itself.
+
+### Uninstalling
+
+Quit OBS, then delete this folder:
+
+```text
+~/Library/Application Support/obs-studio/plugins/obs-macos-videotoolbox-encoders.plugin
+```
+
+## Using it
+
+### Configuring the encoders
+
+Open OBS's **Tools** menu and choose **macOS VideoToolbox Encoders…**. The
+window has a section for H264 and a section for HEVC, each with the same
+three toggles described above, plus a separate section to enable using these
+encoders for Multitrack Video. Every toggle shows a short description and a
+tooltip with a more detailed explanation of what it does and when to use it.
+These settings apply to this Mac, independent of the OBS profile in use.
+
+### As a Multitrack Video encoder (automatic)
+
+Enable **Use these encoders for Multitrack Video** in the settings window.
+The next time you start streaming with Multitrack Video enabled for a
+supported service (Twitch, Amazon IVS, or Dolby OptiView), OBS swaps in the
+Customizable encoder automatically for any track that was using Apple's
+regular H.264/HEVC hardware encoder. Every other output or stream is left
+untouched. If the Customizable encoder isn't available or compatible for some
+reason, OBS quietly falls back to the encoder you already had selected —
+streaming is never blocked by this.
+
+### As a regular encoder (manual)
+
+In **Settings → Output**, pick **Apple VT H264 Hardware Encoder
+(Customizable)** or **Apple VT HEVC Hardware Encoder (Customizable)** from
+the encoder list, the same way you'd pick any other encoder.
+
+## Frequently asked questions
+
+**Does this replace or modify OBS's own encoders?**
+No. It adds two new encoders alongside the ones OBS already ships. Your
+existing encoders and settings are never changed.
+
+**Will this affect streams or recordings that don't use Multitrack Video?**
+No. The automatic replacement only applies to Multitrack Video outputs for
+the supported services, and only while that option is turned on in the
+settings window. Everything else in OBS behaves exactly as before.
+
+**What happens if the Customizable encoder can't be used for some reason?**
+OBS falls back to the encoder it would have used anyway, so a stream never
+fails to start because of this plugin.
+
+**Should I turn RealTime on or off?**
+On for live streaming, where a hardware encoder that reliably keeps up with
+the incoming frame rate matters more than squeezing out the best possible
+quality per bit — this is what Twitch, Amazon IVS, and Dolby OptiView expect.
+Off (the default) for local recording or any non-latency-sensitive use, where
+the encoder is free to spend more effort per frame; this matches how OBS's
+own native hardware encoder already behaves.
+
+**When would I need Prioritize Encoding Speed Over Quality or Custom
+Lookahead Frame Count?**
+Apple's hardware encoders already favor quality by default, even with
+RealTime on, so most people never need to touch these. Turn on Prioritize
+Encoding Speed Over Quality only if you see dropped or delayed frames at your
+chosen resolution, bitrate, or frame rate. Custom Lookahead Frame Count is
+the opposite knob — raising it can recover some of the quality RealTime mode
+gives up, at the cost of a bit more latency and memory; it requires macOS 15
+(Sequoia) or newer.
+
+**Does this work on Intel Macs?**
+Some rate-control modes (CBR, CRF) require Apple Silicon and automatically
+fall back to ABR on Intel. The published installer targets Apple Silicon; on
+Intel Macs the plugin can be built from source, but is not the primary
+supported configuration.
+
+**Is this an official OBS or Apple product?**
+No, it's an independent, open-source plugin. It uses only public OBS Studio
+and Apple VideoToolbox APIs.
+
+**How do I know which OBS version this supports?**
+OBS Studio 31.1.0 or newer. The plugin checks the OBS version it's built
+against and won't build against older versions.
+
+## Building from source
+
+This section is for developers who want to build the plugin themselves
+instead of using the installer.
+
+You'll need a full build of OBS Studio 31.1.0 (or newer) from source first,
+then point CMake at it:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
@@ -45,71 +154,29 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-The OBS build must contain Release builds of OBS, `libobs`, and the public
-frontend API.
-
-## Package and install
-
-Stage the plugin bundle in `dist`:
+Stage and install the built plugin bundle manually:
 
 ```sh
 cmake --install build --prefix ./dist
 ```
 
-The resulting plugin bundle is:
-
-- `obs-macos-videotoolbox-encoders.plugin`
-
-Install that bundle at:
+This produces `obs-macos-videotoolbox-encoders.plugin`, which can be copied
+to:
 
 ```text
 ~/Library/Application Support/obs-studio/plugins/obs-macos-videotoolbox-encoders.plugin
 ```
 
-Alternatively, build the graphical macOS installer:
+Or build the graphical installer package instead:
 
 ```sh
 cmake --build build --target package-pkg
 ```
 
-The generated `dist/obs-macos-videotoolbox-encoders-1.0.0-macos-arm64.pkg`
-installs the plugin automatically for the currently logged-in user. It keeps a
-system payload under `/Library/Application Support/Alekstyle/OBS Plugins` and
-copies the plugin to the OBS user plugin directory in its post-install script.
-
-The visible release version and the monotonically increasing internal package
-version are defined separately at the top of `CMakeLists.txt`. Update the
-visible version manually for a release; increment the internal integer before
-every build or PKG package so macOS applies the new payload.
-
-Set `PKG_SIGN_IDENTITY` to a **Developer ID Installer** identity when producing
-a signed release:
-
-```sh
-PKG_SIGN_IDENTITY='Developer ID Installer: Name (TEAMID)' \
-  cmake --build build --target package-pkg
-```
-
-For a Gatekeeper-ready public release, sign the plugin with a **Developer ID
-Application** identity and submit the signed PKG with a `notarytool` keychain
-profile. The build waits for Apple, staples the ticket, and validates it:
-
-```sh
-APP_SIGN_IDENTITY='Developer ID Application: Name (TEAMID)' \
-PKG_SIGN_IDENTITY='Developer ID Installer: Name (TEAMID)' \
-NOTARY_KEYCHAIN_PROFILE='notary-profile' \
-  cmake --build build --target package-pkg
-```
-
-Without notarization, the installer remains signed but Gatekeeper identifies it
-as an unnotarized Developer ID package.
-
-For ordinary outputs, select **Apple VT H264 Hardware Encoder (RealTime)** or
-**Apple VT HEVC Hardware Encoder (RealTime)** directly in OBS output settings.
-
-The smoke test loads the original and standalone modules together, then checks
-that every standalone encoder maps to the same Apple encoder ID and has the
-same codec, capabilities, properties, and default settings as its original.
+Set `PKG_SIGN_IDENTITY` (and optionally `APP_SIGN_IDENTITY` and
+`NOTARY_KEYCHAIN_PROFILE`) as environment variables if you want to produce a
+signed and notarized package for distribution; see `CMakeLists.txt` and
+`packaging/build-pkg.sh` for details.
 
 ## License
 
