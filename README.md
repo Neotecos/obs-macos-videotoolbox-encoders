@@ -74,6 +74,11 @@ encoders for Multitrack Video. Every toggle shows a short description and a
 tooltip with a more detailed explanation of what it does and when to use it.
 These settings apply to this Mac, independent of the OBS profile in use.
 
+<p align="center">
+  <img src="docs/images/tools-menu.png" alt="OBS Tools menu with macOS VideoToolbox Encoders selected" width="253">
+  <img src="docs/images/settings-window.png" alt="macOS VideoToolbox Encoders settings window" width="445">
+</p>
+
 ### As a Multitrack Video encoder (automatic)
 
 Enable **Use these encoders for Multitrack Video** in the settings window.
@@ -90,6 +95,8 @@ streaming is never blocked by this.
 In **Settings → Output**, pick **Apple VT H264 Hardware Encoder
 (Customizable)** or **Apple VT HEVC Hardware Encoder (Customizable)** from
 the encoder list, the same way you'd pick any other encoder.
+
+![OBS encoder selection showing the customizable H264 and HEVC VideoToolbox encoders](docs/images/encoder-selection.png)
 
 ## Frequently asked questions
 
